@@ -1,0 +1,1037 @@
+:root {
+  /* the dive, surface to trench */
+  --foam: #d7f7f4;
+  --shallow: #57dce6;
+  --cyan: #2db6d4;
+  --mid: #1c7ca8;
+  --deep: #14527e;
+  --night: #0e2e56;
+  --abyss: #081a33;
+  --trench: #04101f;
+
+  --paper: #e6fbfd;
+  /* secondary ink: readable body copy on the dark ground. Dimming with alpha
+     lands around 2.7:1 and fails outright, so it is a solid value. */
+  --paper-2: #a9cfe0;
+  --muted: #6e9bb8;
+  /* the one warm thing in the interface, reserved for the mix */
+  --gold: #ffd86b;
+  --gold-ink: #16233a;
+
+  --panel: rgba(7, 26, 47, 0.86);
+  --panel-solid: #071a2f;
+  --edge: rgba(143, 214, 232, 0.16);
+  --edge-strong: rgba(143, 214, 232, 0.34);
+
+  --sans: 'Instrument Sans', system-ui, sans-serif;
+  --pixel: 'Silkscreen', 'Courier New', monospace;
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 36px;
+  --s-7: 56px;
+
+  /* the scene is built out of square cells, so the chrome is too. Every
+     rounded corner in here was fighting the pixel pass. */
+  --r-card: 0px;
+  --r-pill: 0px;
+
+  /* one ramp, so nothing ever reaches for 9999 */
+  --z-scene: 0;
+  --z-hud: 10;
+  --z-overlay: 30;
+  --z-grain: 60;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--trench);
+  color: var(--paper);
+  font-family: var(--sans);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  /* shift-click is how a node joins the mix, and without this every one of
+     those clicks drags a blue selection across whatever text is behind it */
+  user-select: none;
+}
+
+input {
+  user-select: text;
+}
+
+canvas {
+  display: block;
+  touch-action: none;
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--shallow);
+  outline-offset: 2px;
+}
+
+/* Fitts on touch: the chips are comfortable with a mouse and far too small for
+   a thumb, so grow them only where the pointer is coarse. */
+@media (pointer: coarse) {
+  button {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- keycaps ---------- */
+
+.key {
+  display: inline-block;
+  font-family: var(--pixel);
+  font-size: 8.5px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  color: var(--paper-2);
+  background: rgba(143, 214, 232, 0.09);
+  border: 1px solid var(--edge);
+  /* the lip along the bottom is the whole reason it reads as a key */
+  box-shadow: 0 1px 0 var(--edge);
+  padding: 3px 5px 2px;
+  vertical-align: middle;
+}
+
+.key + .key {
+  margin-left: 3px;
+}
+
+/* ---------- film grain ---------- */
+
+.grain {
+  position: fixed;
+  /* oversized so the shifting animation never exposes an edge */
+  inset: -50%;
+  width: 200%;
+  height: 200%;
+  pointer-events: none;
+  z-index: var(--z-grain);
+  background-repeat: repeat;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  animation: grain-shift 0.8s steps(1) infinite;
+}
+
+@keyframes grain-shift {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  20% {
+    transform: translate3d(-6%, 4%, 0);
+  }
+  40% {
+    transform: translate3d(5%, -5%, 0);
+  }
+  60% {
+    transform: translate3d(-3%, -6%, 0);
+  }
+  80% {
+    transform: translate3d(6%, 3%, 0);
+  }
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .grain {
+    animation: none;
+  }
+}
+
+/* ---------- hud shell ---------- */
+
+.hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: var(--z-hud);
+}
+
+.hud > * {
+  pointer-events: auto;
+}
+
+/* ---------- seed prompt ---------- */
+
+.seed-prompt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-4);
+  /* the seed sits low in the frame, so the words sit above it and the brief
+     reads as the thing about to be planted into it */
+  padding: 0 var(--s-5) 30vh;
+  text-align: center;
+}
+
+.seed-prompt h1 {
+  font-family: var(--pixel);
+  font-weight: 400;
+  font-size: clamp(34px, 5.6vw, 66px);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  margin: 0;
+  color: var(--foam);
+  text-shadow: 0 0 22px rgba(87, 220, 230, 0.45), 0 3px 0 rgba(4, 16, 31, 0.7);
+  text-wrap: balance;
+}
+
+.seed-prompt__sub {
+  margin: 0 0 var(--s-3);
+  color: var(--paper-2);
+  font-size: 14.5px;
+  max-width: 44ch;
+  text-wrap: balance;
+}
+
+.seed-prompt form {
+  display: flex;
+  gap: var(--s-2);
+  width: min(580px, 86vw);
+}
+
+.seed-prompt input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(7, 26, 47, 0.72);
+  border: 1px solid var(--edge-strong);
+  padding: 15px 18px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.24s var(--ease-out-quint),
+    background 0.24s var(--ease-out-quint);
+}
+
+.seed-prompt input:hover {
+  background: rgba(7, 26, 47, 0.85);
+}
+
+.seed-prompt input:focus {
+  border-color: var(--shallow);
+  background: rgba(10, 38, 66, 0.9);
+}
+
+.seed-prompt input::placeholder {
+  color: var(--muted);
+}
+
+.seed-prompt button[type='submit'] {
+  font-family: var(--pixel);
+  font-size: 13px;
+  background: var(--shallow);
+  color: var(--trench);
+  border: none;
+  padding: 15px 26px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: transform 0.24s var(--ease-out-expo), filter 0.24s,
+    box-shadow 0.24s var(--ease-out-expo);
+}
+
+.seed-prompt button[type='submit']:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+  box-shadow: 0 6px 22px rgba(87, 220, 230, 0.3);
+}
+
+.seed-prompt button[type='submit']:active {
+  transform: translateY(0) scale(0.985);
+}
+
+.seed-prompt__examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  justify-content: center;
+  max-width: min(620px, 88vw);
+}
+
+.seed-prompt__examples button {
+  background: rgba(7, 26, 47, 0.5);
+  border: 1px solid var(--edge);
+  color: var(--paper-2);
+  padding: 7px 13px;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: color 0.22s var(--ease-out-quint),
+    border-color 0.22s var(--ease-out-quint), background 0.22s var(--ease-out-quint);
+}
+
+.seed-prompt__examples button:hover {
+  color: var(--paper);
+  border-color: var(--edge-strong);
+  background: rgba(20, 82, 126, 0.4);
+}
+
+/* ---------- brief bar ---------- */
+
+/* the water behind the chrome is bright cyan at the top of the frame, so
+   every corner panel carries its own ground or the type disappears into it */
+.brief {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  backdrop-filter: blur(8px);
+}
+
+.brief__mark {
+  font-family: var(--pixel);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  color: var(--foam);
+}
+
+.brief__text {
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 34ch;
+}
+
+.brief button {
+  background: rgba(7, 26, 47, 0.6);
+  border: 1px solid var(--edge);
+  color: var(--muted);
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.brief button:hover {
+  color: var(--paper);
+  border-color: var(--edge-strong);
+}
+
+/* ---------- legend ---------- */
+
+.legend-wrap {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  padding: 11px 13px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  backdrop-filter: blur(8px);
+}
+
+.legend {
+  display: grid;
+  gap: 5px;
+}
+
+.legend__row {
+  display: grid;
+  grid-template-columns: 8px 68px 1fr;
+  align-items: center;
+  gap: 9px;
+  font-size: 11px;
+}
+
+.legend__dot {
+  width: 7px;
+  height: 7px;
+  display: inline-block;
+}
+
+.legend__label {
+  font-family: var(--pixel);
+  font-size: 9px;
+  letter-spacing: 0.03em;
+  color: var(--paper);
+}
+
+.legend__blurb {
+  color: var(--muted);
+  text-align: right;
+}
+
+/* ---------- control bar ---------- */
+
+.controlbar {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 12px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  backdrop-filter: blur(8px);
+  font-size: 11.5px;
+  color: var(--paper-2);
+  white-space: nowrap;
+}
+
+.controlbar__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.controlbar__sep {
+  width: 1px;
+  height: 14px;
+  background: var(--edge);
+}
+
+.controlbar__grade,
+.controlbar__more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: 1px solid var(--edge);
+  color: var(--paper-2);
+  padding: 4px 9px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.controlbar__grade {
+  font-family: var(--pixel);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  min-width: 52px;
+  justify-content: center;
+  color: var(--shallow);
+  border-color: rgba(87, 220, 230, 0.34);
+}
+
+.controlbar__grade:hover,
+.controlbar__more:hover {
+  color: var(--paper);
+  border-color: var(--edge-strong);
+  background: rgba(20, 82, 126, 0.42);
+}
+
+@media (max-width: 860px) {
+  .controlbar__item,
+  .controlbar__sep {
+    display: none;
+  }
+}
+
+/* ---------- guide overlay ---------- */
+
+.guide {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-5);
+  background: rgba(4, 16, 31, 0.66);
+  backdrop-filter: blur(6px);
+}
+
+.guide__panel {
+  width: min(760px, 94vw);
+  max-height: 86vh;
+  overflow-y: auto;
+  background: var(--panel-solid);
+  border: 1px solid var(--edge-strong);
+  /* one hard offset shadow rather than a soft one: a blurred drop shadow is
+     the one thing on screen the pixel grid cannot explain */
+  box-shadow: 8px 8px 0 rgba(4, 16, 31, 0.55);
+  padding: var(--s-5) var(--s-5) var(--s-6);
+}
+
+.guide__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+}
+
+.guide__head h2 {
+  font-family: var(--pixel);
+  font-weight: 400;
+  font-size: 18px;
+  letter-spacing: 0.03em;
+  margin: 0;
+  color: var(--foam);
+}
+
+.guide__head button {
+  background: none;
+  border: 1px solid var(--edge);
+  color: var(--muted);
+  padding: 5px 12px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.guide__head button:hover {
+  color: var(--paper);
+  border-color: var(--edge-strong);
+}
+
+.guide__lede {
+  margin: var(--s-3) 0 var(--s-5);
+  max-width: 62ch;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--paper-2);
+}
+
+.guide__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--s-5) var(--s-6);
+}
+
+.guide__section h3 {
+  font-family: var(--pixel);
+  font-weight: 400;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--shallow);
+  margin: 0 0 var(--s-2);
+}
+
+.guide__note {
+  margin: 0 0 var(--s-3);
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.guide__section ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.guide__section li {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  align-items: center;
+  gap: var(--s-3);
+  font-size: 12.5px;
+  color: var(--paper);
+}
+
+.guide__keys {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+/* ---------- node labels in 3d ---------- */
+
+.node-label {
+  --lscale: 1;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--paper);
+  background: rgba(5, 20, 38, 0.8);
+  border: 1px solid var(--facet, var(--edge));
+  padding: 3px 9px;
+  white-space: nowrap;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transform: scale(var(--lscale));
+  text-shadow: 0 1px 2px rgba(4, 16, 31, 0.9);
+  transition: background 0.2s, color 0.2s;
+  will-change: opacity, transform;
+}
+
+.node-label.is-provisional {
+  color: var(--muted);
+  border-style: dashed;
+  font-style: italic;
+}
+
+.node-label.is-selected {
+  background: var(--facet);
+  color: #06121f;
+  font-weight: 600;
+}
+
+.node-label.is-mixed {
+  box-shadow: 0 0 0 2px rgba(255, 216, 107, 0.65);
+}
+
+.node-label__more {
+  margin-left: 6px;
+  opacity: 0.5;
+  font-family: var(--pixel);
+  font-size: 9px;
+}
+
+.node-label__tag {
+  margin-right: 6px;
+  font-family: var(--pixel);
+  font-size: 7.5px;
+  letter-spacing: 0.04em;
+  color: var(--facet);
+  opacity: 0.9;
+}
+
+.node-label.is-selected .node-label__tag {
+  color: #06121f;
+}
+
+.node-label.is-pending {
+  border-style: dotted;
+}
+
+.node-label.is-empty {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+/* ---------- optional model key ---------- */
+
+.keyslot {
+  width: 268px;
+  margin-top: var(--s-3);
+  padding-top: var(--s-3);
+  /* a hairline instead of a gap: it binds the key control to the legend above
+     it as one panel, rather than leaving two unrelated things in the corner */
+  border-top: 1px solid var(--edge);
+  text-align: right;
+}
+
+.keyslot__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: none;
+  border: none;
+  padding: 2px 0;
+  font-family: var(--pixel);
+  font-size: 8.5px;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.2s var(--ease-out-quint);
+}
+
+.keyslot__toggle:hover {
+  color: var(--paper);
+}
+
+.keyslot__dot {
+  width: 5px;
+  height: 5px;
+  background: var(--muted);
+  opacity: 0.5;
+  transition: background 0.2s, opacity 0.2s, box-shadow 0.2s;
+}
+
+.keyslot__dot.is-on {
+  background: var(--shallow);
+  opacity: 1;
+  box-shadow: 0 0 8px rgba(87, 220, 230, 0.7);
+}
+
+.keyslot__body {
+  overflow: hidden;
+}
+
+.keyslot__row {
+  display: flex;
+  gap: var(--s-1);
+  margin-top: var(--s-2);
+}
+
+.keyslot input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(7, 26, 47, 0.7);
+  border: 1px solid var(--edge);
+  padding: 6px 10px;
+  font-size: 11px;
+  outline: none;
+  transition: border-color 0.2s var(--ease-out-quint);
+}
+
+.keyslot input:focus {
+  border-color: var(--edge-strong);
+}
+
+.keyslot input::placeholder {
+  color: var(--muted);
+}
+
+.keyslot__body button {
+  background: none;
+  border: 1px solid var(--edge);
+  color: var(--paper-2);
+  padding: 6px 12px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.keyslot__body button:hover {
+  color: var(--paper);
+  border-color: var(--edge-strong);
+  background: rgba(20, 82, 126, 0.4);
+}
+
+.keyslot p {
+  margin: var(--s-2) 0 0;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  text-align: right;
+}
+
+/* ---------- detail card ---------- */
+
+.detail {
+  position: absolute;
+  left: 24px;
+  bottom: 72px;
+  width: min(330px, 40vw);
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  padding: 14px 16px 13px;
+  backdrop-filter: blur(10px);
+}
+
+.detail__facet {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--pixel);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+
+.detail__facet em {
+  font-style: normal;
+  margin-left: 8px;
+  padding: 2px 6px 1px;
+  border: 1px solid currentColor;
+  font-size: 8px;
+  opacity: 0.8;
+}
+
+.detail h2 {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 19px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  margin: 9px 0 0;
+}
+
+.detail p {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--paper-2);
+}
+
+.detail__empty {
+  font-style: italic;
+}
+
+.detail__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.detail__actions button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  background: rgba(143, 214, 232, 0.07);
+  border: 1px solid var(--edge);
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, transform 0.18s;
+}
+
+.detail__actions button:hover:not(:disabled) {
+  background: rgba(20, 82, 126, 0.5);
+  border-color: var(--edge-strong);
+}
+
+.detail__actions button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.detail__actions button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.detail__actions button.is-on {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--gold-ink);
+  font-weight: 600;
+}
+
+.detail__actions button.is-on .key {
+  color: var(--gold-ink);
+  border-color: rgba(22, 35, 58, 0.4);
+  background: rgba(22, 35, 58, 0.12);
+  box-shadow: 0 1px 0 rgba(22, 35, 58, 0.3);
+}
+
+/* ---------- mix tray ---------- */
+
+.mix {
+  position: absolute;
+  bottom: 72px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  padding: 13px 14px;
+  backdrop-filter: blur(10px);
+  width: 268px;
+  transition: border-color 0.3s var(--ease-out-quint);
+}
+
+.mix.is-ready {
+  border-color: rgba(255, 216, 107, 0.5);
+}
+
+.mix__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mix__title {
+  font-family: var(--pixel);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--gold);
+}
+
+.mix__hint {
+  font-size: 10.5px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.mix__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mix__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(143, 214, 232, 0.06);
+  border: 1px solid var(--facet);
+  color: var(--paper);
+  padding: 5px 9px;
+  font-size: 12px;
+  cursor: pointer;
+  max-width: 100%;
+}
+
+.mix__chip span {
+  opacity: 0.5;
+}
+
+/* an empty hole asks to be filled; a missing row says nothing at all */
+.mix__slot {
+  flex: 1;
+  min-width: 78px;
+  height: 27px;
+  border: 1px dashed var(--edge-strong);
+  opacity: 0.55;
+}
+
+.mix__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mix__go {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-family: var(--sans);
+  background: var(--gold);
+  color: var(--gold-ink);
+  border: none;
+  padding: 8px 14px;
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.18s;
+}
+
+.mix__go .key {
+  color: var(--gold-ink);
+  border-color: rgba(22, 35, 58, 0.4);
+  background: rgba(22, 35, 58, 0.12);
+  box-shadow: 0 1px 0 rgba(22, 35, 58, 0.3);
+}
+
+.mix__go:hover:not(:disabled) {
+  transform: scale(1.03);
+}
+
+.mix__go:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+
+.mix__clear {
+  background: none;
+  border: 1px solid var(--edge);
+  color: var(--muted);
+  padding: 8px 14px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.mix__clear:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* ---------- fusion card ---------- */
+
+.fusion-card {
+  width: 250px;
+  background: rgba(7, 26, 47, 0.93);
+  border: 1px solid rgba(255, 216, 107, 0.45);
+  padding: 12px 13px;
+  backdrop-filter: blur(8px) saturate(1.1);
+}
+
+.fusion-card.is-provisional {
+  border-color: var(--edge);
+}
+
+.fusion-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--pixel);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  line-height: 1.45;
+  color: var(--gold);
+}
+
+.fusion-card.is-provisional .fusion-card__head {
+  color: var(--paper);
+}
+
+.fusion-card__head button {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.fusion-card p {
+  margin: 9px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--paper);
+}
+
+.fusion-card__tag {
+  display: inline-block;
+  margin-top: 9px;
+  font-family: var(--pixel);
+  font-size: 8px;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.fusion-card__crossings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.fusion-card__crossings button {
+  background: rgba(255, 216, 107, 0.1);
+  border: 1px solid rgba(255, 216, 107, 0.38);
+  color: var(--paper);
+  padding: 3px 8px;
+  font-size: 10.5px;
+  cursor: pointer;
+  transition: background 0.16s, transform 0.16s;
+}
+
+.fusion-card__crossings button:hover {
+  background: rgba(255, 216, 107, 0.26);
+  transform: translateY(-1px);
+}
