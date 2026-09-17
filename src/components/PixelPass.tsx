@@ -3,23 +3,37 @@ import { BlendFunction, Effect } from 'postprocessing'
 import { Uniform, Vector3 } from 'three'
 
 /**
- * The 26 colours the whole dive is allowed to use. A fixed palette rather than
+ * The 37 colours the whole dive is allowed to use. A fixed palette rather than
  * per-channel levels is the difference between pixel art and static: levels
  * quantise every pixel on its own, so a smooth gradient turns into a field of
  * dithered noise. A palette snaps whole regions onto one entry, which is what
  * gives the reference images their flat plates of colour, and it leaves the
  * dither to do its real job at the seams between them.
  *
+ * It is built as ramps, not as a bag of colours: water and stone, then three
+ * tones for each living hue. The reef sprites paint straight out of these
+ * entries, so their shading survives the match instead of collapsing onto one
+ * flat swatch, which is what happens the moment a sprite uses a colour the
+ * palette cannot say.
+ *
  * Held in display space, not linear, so nearest-colour is measured roughly the
  * way an eye measures it.
  */
 const PALETTE = [
-  '#04101f', '#081a33', '#0e2e56', '#14527e', '#1c7ca8', '#2db6d4',
-  '#57dce6', '#a6eef2', '#d7f7f4', '#ffffff',
-  '#2a3a46', '#4a5560', '#8a8a78', '#c9b98e', '#e8d9ae', '#f4ead2',
-  '#c2467a', '#ff6f9f', '#c25a1e', '#ff9247',
-  '#2a8f68', '#4fd99a', '#6b4ba8', '#a97bf0',
-  '#9aa83a', '#dce85c', '#ffd86b',
+  // water, surface to trench
+  '#ffffff', '#d7f7f4', '#a6eef2', '#57dce6', '#2db6d4', '#1c7ca8',
+  '#14527e', '#0e2e56', '#081a33', '#04101f',
+  // sand and stone
+  '#f4ead2', '#e8d9ae', '#c9b98e', '#8a8a78', '#4a5560', '#2a3a46',
+  // reef life, three tones each
+  '#ff6f9f', '#c2467a', '#8e2a52',
+  '#ff7a6b', '#d1354e', '#7a1f33',
+  '#ff9247', '#c25a1e', '#7a3311',
+  '#ffd86b', '#ffc23d',
+  '#dce85c', '#9aa83a', '#5e6b22',
+  '#4fd99a', '#2a8f68', '#1f7a6a',
+  '#a97bf0', '#6b4ba8', '#432c6b',
+  '#e26ede',
 ]
 
 function toVec3(hex: string) {

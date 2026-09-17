@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { SEA, coralTexture, kelpTexture, rng, rockTexture } from '../lib/sea'
+import { FLOOR_Y, SEA, rng } from '../lib/sea'
+import { SOFT, SPRITE_HEIGHT, type Sprite, type SpriteKind, reefSprite } from '../lib/sprites'
+import { Fish } from './Fish'
 
-export const FLOOR_Y = -15
+export { FLOOR_Y }
 
 /**
  * The seafloor. A flat plane would read as a table, so the caustics do the
@@ -87,106 +89,208 @@ function Seafloor() {
   )
 }
 
+/**
+ * Mounds are the one part of the seabed that is real geometry rather than a
+ * card, and being lit and solid is exactly the point: a billboard cannot tell
+ * you the ground is not flat, and without that the reef sits on a sheet of
+ * glass. They also give the cards something to stand on and hide behind.
+ */
+function Mounds() {
+  const mounds = useMemo(() => {
+    const rand = rng(4457)
+    // kept close to the floor shader's own sand, and never wider than they are
+    // tall by much: a broad flat dome catches the key light across its whole
+    // top and reads as a puddle of light rather than as ground
+    const tones = ['#24455A', '#1E3F52', '#2B506A', '#1A3849']
+    return Array.from({ length: 14 }, (_, i) => {
+      const a = (i / 14) * Math.PI * 2 + rand() * 0.7
+      const r = 13 + rand() * 28
+      const w = 3.5 + rand() * 5
+      const h = 2 + rand() * 3.4
+      return {
+        key: i,
+        position: [Math.cos(a) * r, FLOOR_Y - h * 0.35, Math.sin(a) * r] as [number, number, number],
+        scale: [w, h, w * (0.7 + rand() * 0.6)] as [number, number, number],
+        rotation: [rand() * 0.3, rand() * Math.PI, rand() * 0.3] as [number, number, number],
+        color: tones[Math.floor(rand() * tones.length)],
+      }
+    })
+  }, [])
+
+  return (
+    <>
+      {mounds.map((m) => (
+        <mesh
+          key={m.key}
+          position={m.position}
+          scale={m.scale}
+          rotation={m.rotation}
+          raycast={() => null}
+        >
+          <icosahedronGeometry args={[1, 1]} />
+          <meshStandardMaterial color={m.color} roughness={0.96} metalness={0} flatShading />
+        </mesh>
+      ))}
+    </>
+  )
+}
+
+type Spot = { angle: number; radius: number; scale: number }
+
+/**
+ * Reef life clumps. Scattering evenly over a ring gives a lawn, and a lawn is
+ * the thing a reef is least like: colonies crowd onto whatever hard ground
+ * they can get and leave open sand between. So placement picks a dozen
+ * thickets and grows everything around those.
+ */
+function clumpSpots(seed: number, count: number, inner: number, outer: number): Spot[] {
+  const rand = rng(seed)
+  const centres = Array.from({ length: 17 }, () => ({
+    angle: rand() * Math.PI * 2,
+    radius: inner + Math.sqrt(rand()) * (outer - inner),
+  }))
+  return Array.from({ length: count }, () => {
+    const c = centres[Math.floor(rand() * centres.length)]
+    const spread = 2.2 + rand() * 3.6
+    const off = rand() * Math.PI * 2
+    const radius = Math.max(inner * 0.85, c.radius + Math.cos(off) * spread)
+    return {
+      angle: c.angle + (Math.sin(off) * spread) / radius,
+      radius,
+      scale: 0.8 + rand() * 0.5,
+    }
+  })
+}
+
+/** An even ring, which is what the distance bands want: a horizon, not clumps. */
+function ringSpots(seed: number, count: number, radius: number, spread: number): Spot[] {
+  const rand = rng(seed)
+  return Array.from({ length: count }, (_, i) => ({
+    angle: (i / count) * Math.PI * 2 + rand() * 0.4,
+    radius: radius + (rand() - 0.5) * spread,
+    scale: 1.4 + rand() * 1.1,
+  }))
+}
+
 type Card = {
   key: string
-  kind: 'rock' | 'coral' | 'kelp'
+  kind: SpriteKind
+  index: number
   position: [number, number, number]
-  scale: [number, number]
-  seed: number
+  height: number
+  flip: number
   sway: number
 }
 
+type Patch = { sprites: Sprite[]; cards: Card[] }
+
 /**
- * One band of scenery at a fixed distance. Three of these at different radii
- * is the whole parallax trick: orbiting moves the near band across the far one
- * at a visibly different rate, which is what gives the water depth. It is the
- * same thing a side-scroller does with scrolling layers, done with real
- * distance instead of a scroll multiplier.
+ * Builds a sprite set and the cards that use it. Sprites are shared across
+ * every card that references them, so a hundred pieces of reef cost a couple
+ * of dozen small canvases rather than a hundred.
  */
-function Band({
-  radius,
-  count,
-  color,
-  height,
-  spread,
-  seed,
+function buildPatch(
+  seed: number,
+  kinds: readonly SpriteKind[],
+  variants: number,
+  spots: Spot[],
+): Patch {
+  const rand = rng(seed * 7919 + 13)
+  const sprites: Sprite[] = []
+  const byKind = new Map<SpriteKind, number[]>()
+  kinds.forEach((kind, k) => {
+    const list: number[] = []
+    for (let v = 0; v < variants; v++) {
+      list.push(sprites.length)
+      sprites.push(reefSprite(kind, seed * 977 + k * 131 + v * 17))
+    }
+    byKind.set(kind, list)
+  })
+
+  const cards = spots.map((spot, i) => {
+    const kind = kinds[Math.floor(rand() * kinds.length)]
+    const list = byKind.get(kind)!
+    const [lo, hi] = SPRITE_HEIGHT[kind]
+    const height = (lo + rand() * (hi - lo)) * spot.scale
+    return {
+      key: `${seed}-${i}`,
+      kind,
+      index: list[Math.floor(rand() * list.length)],
+      position: [
+        Math.cos(spot.angle) * spot.radius,
+        FLOOR_Y + height / 2 - height * 0.06,
+        Math.sin(spot.angle) * spot.radius,
+      ] as [number, number, number],
+      height,
+      flip: rand() < 0.5 ? -1 : 1,
+      sway: rand(),
+    }
+  })
+
+  return { sprites, cards }
+}
+
+/** Cards standing on the sand, billboarded around Y and swaying if they are soft. */
+function Scatter({
+  patch,
+  tint,
+  sway = 0.05,
 }: {
-  radius: number
-  count: number
-  color: string
-  height: number
-  spread: number
-  seed: number
+  patch: Patch
+  tint: string
+  sway?: number
 }) {
   const group = useRef<THREE.Group>(null)
-
-  const textures = useMemo(() => {
-    const rock = [0, 1, 2].map((i) => rockTexture(seed * 131 + i * 17))
-    const coral = [0, 1, 2].map((i) => coralTexture(seed * 197 + i * 23))
-    const kelp = [0, 1].map((i) => kelpTexture(seed * 271 + i * 29))
-    return { rock, coral, kelp }
-  }, [seed])
+  const { cards, sprites } = patch
 
   useEffect(
     () => () => {
-      for (const list of Object.values(textures)) for (const t of list) t.dispose()
+      for (const s of sprites) s.texture.dispose()
     },
-    [textures],
+    [sprites],
   )
-
-  const cards = useMemo<Card[]>(() => {
-    const rand = rng(seed * 7919 + 13)
-    return Array.from({ length: count }, (_, i) => {
-      const a = (i / count) * Math.PI * 2 + rand() * 0.4
-      const r = radius + (rand() - 0.5) * spread
-      const roll = rand()
-      const kind: Card['kind'] = roll < 0.5 ? 'rock' : roll < 0.82 ? 'coral' : 'kelp'
-      const h = height * (kind === 'rock' ? 1 : kind === 'kelp' ? 0.85 : 0.6) * (0.6 + rand() * 0.8)
-      const w = h * (kind === 'rock' ? 1.6 : kind === 'kelp' ? 0.55 : 1.05)
-      return {
-        key: `${seed}-${i}`,
-        kind,
-        position: [Math.cos(a) * r, FLOOR_Y + h / 2 - h * 0.06, Math.sin(a) * r],
-        scale: [w, h],
-        seed: Math.floor(rand() * 3),
-        sway: rand(),
-      }
-    })
-  }, [radius, count, height, spread, seed])
 
   useFrame(({ clock, camera }) => {
     const g = group.current
     if (!g) return
     const t = clock.elapsedTime
-    g.children.forEach((child, i) => {
+    for (let i = 0; i < cards.length; i++) {
+      const child = g.children[i]
+      const card = cards[i]
+      if (!child) continue
       child.rotation.y = Math.atan2(
         camera.position.x - child.position.x,
         camera.position.z - child.position.z,
       )
       // only the soft things move, and slowly: a swaying rock is a bouncy ball
-      const card = cards[i]
-      if (card && card.kind !== 'rock') {
-        child.rotation.z = Math.sin(t * 0.34 + card.sway * 9) * 0.045
-      }
-    })
+      if (SOFT.has(card.kind)) child.rotation.z = Math.sin(t * 0.34 + card.sway * 9) * sway
+    }
   })
 
   return (
     <group ref={group}>
-      {cards.map((c) => (
-        <mesh key={c.key} position={c.position} scale={[c.scale[0], c.scale[1], 1]} raycast={() => null}>
-          <planeGeometry args={[1, 1]} />
-          <meshBasicMaterial
-            map={textures[c.kind][c.seed % textures[c.kind].length]}
-            color={color}
-            // alphaTest instead of transparency: a cut-out keeps the pixel edge
-            // hard and keeps the depth buffer honest between overlapping cards
-            alphaTest={0.5}
-            side={THREE.DoubleSide}
-            fog
-          />
-        </mesh>
-      ))}
+      {cards.map((c) => {
+        const sprite = sprites[c.index]
+        return (
+          <mesh
+            key={c.key}
+            position={c.position}
+            scale={[c.height * sprite.aspect * c.flip, c.height, 1]}
+            raycast={() => null}
+          >
+            <planeGeometry args={[1, 1]} />
+            <meshBasicMaterial
+              map={sprite.texture}
+              color={tint}
+              // alphaTest instead of transparency: a cut-out keeps the pixel edge
+              // hard and keeps the depth buffer honest between overlapping cards
+              alphaTest={0.5}
+              side={THREE.DoubleSide}
+              fog
+            />
+          </mesh>
+        )
+      })}
     </group>
   )
 }
@@ -306,16 +410,54 @@ function Drift({
   )
 }
 
+const GARDEN_KINDS: SpriteKind[] = [
+  'staghorn',
+  'brain',
+  'table',
+  'fan',
+  'tube',
+  'barrel',
+  'bubble',
+  'polyps',
+  'toadstool',
+  'anemone',
+  'seagrass',
+  'kelp',
+  'rock',
+  'boulder',
+]
+
+const TRINKET_KINDS: SpriteKind[] = ['star', 'shell', 'urchin', 'clam']
+
+/** The bands are read as a skyline, so only shapes that survive at that size. */
+const BAND_KINDS: SpriteKind[] = ['rock', 'boulder', 'staghorn', 'fan', 'kelp', 'tube', 'brain', 'table']
+
 export function Reef() {
+  const garden = useMemo(() => buildPatch(31, GARDEN_KINDS, 3, clumpSpots(8123, 96, 6, 32)), [])
+  const trinkets = useMemo(() => buildPatch(53, TRINKET_KINDS, 2, clumpSpots(5519, 30, 6, 30)), [])
+  const near = useMemo(() => buildPatch(3, BAND_KINDS, 2, ringSpots(101, 11, 36, 10)), [])
+  const mid = useMemo(() => buildPatch(11, BAND_KINDS, 2, ringSpots(211, 14, 58, 15)), [])
+  const far = useMemo(() => buildPatch(29, BAND_KINDS, 2, ringSpots(307, 20, 94, 26)), [])
+
   return (
     <>
       <Seafloor />
+      <Mounds />
 
-      {/* near, mid, far. Each band is lighter than the one in front of it:
-          under water, distance means haze, not shadow. */}
-      <Band radius={36} count={10} color="#061626" height={6} spread={10} seed={3} />
-      <Band radius={58} count={13} color="#0A2742" height={11} spread={15} seed={11} />
-      <Band radius={94} count={18} color="#10405F" height={20} spread={26} seed={29} />
+      {/* the garden is close enough to keep its own colour; nothing is tinted
+          away from what the sprite generator chose */}
+      <Scatter patch={garden} tint="#FFFFFF" sway={0.06} />
+      <Scatter patch={trinkets} tint="#FFFFFF" />
+
+      {/* near, mid, far. The tint only cools each band slightly; the fog does
+          the real distance work. Tinting hard turns the bands black instead of
+          hazy, because a colour multiply can only ever darken, and under water
+          distance means haze and lost colour, not shadow. */}
+      <Scatter patch={near} tint="#E4F0F6" sway={0.04} />
+      <Scatter patch={mid} tint="#C6DDEA" sway={0.03} />
+      <Scatter patch={far} tint="#AECEE0" sway={0.02} />
+
+      <Fish />
 
       <Drift
         count={120}
