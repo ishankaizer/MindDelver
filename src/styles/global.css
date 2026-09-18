@@ -359,6 +359,13 @@ input {
   backdrop-filter: blur(8px);
 }
 
+/* only meaningful on mobile (see the mobile layout block below), where the
+   full legend at full width is too tall to sit permanently on screen; on
+   desktop this button stays hidden and the body is always shown */
+.legend-wrap__toggle {
+  display: none;
+}
+
 .legend {
   display: grid;
   gap: 5px;
@@ -517,6 +524,53 @@ input {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* six stacked rows at full width run close to half the screen, which is
+     too much of a phone to give up permanently to a reference panel, so it
+     starts collapsed behind a small toggle instead of always open */
+  .legend-wrap {
+    padding: 0;
+    border-color: transparent;
+    background: none;
+    backdrop-filter: none;
+  }
+
+  .legend-wrap__toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    color: var(--paper-2);
+    padding: 7px 12px;
+    font-family: var(--pixel);
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    backdrop-filter: blur(8px);
+  }
+
+  .legend-wrap__toggle::after {
+    content: '▾';
+    font-family: var(--sans);
+  }
+
+  .legend-wrap.is-open .legend-wrap__toggle::after {
+    content: '▴';
+  }
+
+  .legend-wrap__body {
+    display: none;
+    margin-top: 8px;
+    padding: 11px 13px;
+    background: var(--panel);
+    border: 1px solid var(--edge);
+    backdrop-filter: blur(8px);
+  }
+
+  .legend-wrap.is-open .legend-wrap__body {
+    display: block;
   }
 
   /* the descriptive blurb is what makes the legend wide; drop it and the

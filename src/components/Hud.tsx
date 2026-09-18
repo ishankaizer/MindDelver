@@ -341,6 +341,9 @@ export function Hud() {
   const brief = useGraph((s) => s.brief)
   const plant = useGraph((s) => s.plant)
   const setGuideOpen = useGraph((s) => s.setGuideOpen)
+  // collapsed by default; irrelevant on desktop, where CSS keeps the body
+  // always visible and hides the toggle regardless of this state
+  const [legendOpen, setLegendOpen] = useState(false)
   useShortcuts()
 
   // the first dive gets the map opened for it, once, ever
@@ -370,13 +373,22 @@ export function Hud() {
             </motion.div>
 
             <motion.div
-              className="legend-wrap"
+              className={'legend-wrap' + (legendOpen ? ' is-open' : '')}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.6, delay: 0.3 }}
             >
-              <Legend />
-              <KeySlot />
+              <button
+                className="legend-wrap__toggle"
+                aria-expanded={legendOpen}
+                onClick={() => setLegendOpen((o) => !o)}
+              >
+                facets
+              </button>
+              <div className="legend-wrap__body">
+                <Legend />
+                <KeySlot />
+              </div>
             </motion.div>
           </div>
 

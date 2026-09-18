@@ -10,6 +10,39 @@ you did.
 
 ---
 
+## 2026-09-18 (seventh session): pushed to master, legend was too tall
+
+Pushed the mobile + PWA work to `origin master` at Ishan's go-ahead (Vercel
+is already connected and watches that branch). Fast-forward merge, no
+conflicts. Then Ishan opened the live site (`divien.vercel.app`) on his
+phone and sent a screenshot: layout was structurally correct - top dock and
+bottom dock both stacking exactly as designed, nothing overlapping - but the
+legend, stacked at full width with all six facet rows plus the model-key
+control, was eating close to 40% of the screen and squeezing the reef into
+a thin middle strip. True on a phone in a way it never was in the corner-box
+desktop layout, which is why the first mobile pass missed it: shrinking a
+corner panel and stacking a panel at full width are different problems.
+
+Fixed by collapsing the legend behind a `facets` toggle on mobile, closed by
+default. `KeySlot` right next to it already used exactly this pattern
+(closed by default, opens on tap), so this is really the same idea applied
+one level up.
+
+**Also learned this session:** this sandbox's network egress is an
+allowlist (npm, PyPI, Anthropic's own endpoints, a few others), not a
+default-allow with exceptions - `divien.vercel.app` is blocked outright, so
+neither `WebFetch` nor a plain `curl` can reach the live site from here.
+Verifying a deploy from inside this container is not possible; it has to be
+Ishan checking the real URL on a real device, which is also the more honest
+test anyway since PWA install prompts are Chrome-proprietary and don't fire
+in the sandbox's open-source Chromium regardless.
+
+Verified this fix with `npm run dev` at a 390px touch-emulated viewport:
+collapsed state shows the reef almost full-height, `facets` tap opens the
+full legend over it.
+
+---
+
 ## 2026-09-18 (sixth session): installable PWA
 
 Follow-up to the mobile pass: asked to add a manifest so the app installs to

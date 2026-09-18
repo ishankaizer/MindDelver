@@ -110,6 +110,13 @@ assumed a mouse and a wide screen:
   children go `position: static` and stack in a column. Without this the
   four corner panels, each absolutely positioned for a wide screen,
   physically overlap on a phone.
+- The legend, stacked at full width, is six rows plus the model-key
+  control: tall enough to push the reef itself into a squeezed middle
+  strip. Below 680px it starts collapsed behind a `facets` toggle
+  (`legendOpen` state in `Hud.tsx`, `.legend-wrap__toggle` /
+  `.legend-wrap__body` in the CSS) instead of sitting open by default.
+  The toggle itself stays hidden above 680px, where the corner box is
+  small enough that collapsing it would just be an extra tap for nothing.
 - `index.html`'s viewport meta gained `maximum-scale=1, user-scalable=no,
   viewport-fit=cover`: native pinch-zoom would otherwise fight
   `OrbitControls`' own pinch-to-dolly, and `viewport-fit=cover` plus
