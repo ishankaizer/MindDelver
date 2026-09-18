@@ -6,7 +6,7 @@ import { ToneMappingMode } from 'postprocessing'
 import * as THREE from 'three'
 import { deconflictLabels } from '../lib/labels'
 import { createRimMaterial } from '../lib/rim'
-import { SEA } from '../lib/sea'
+import { SEA, rng } from '../lib/sea'
 import { PIXEL_GRADES, SEED_ID, useGraph, worldPosition } from '../store/useGraph'
 import { Atmosphere } from './Atmosphere'
 import { FLOOR_Y, Reef } from './Reef'
@@ -87,14 +87,73 @@ function IdleDrift() {
   return null
 }
 
-/** The rock the whole thing is anchored to, so the coral is not floating. */
+/**
+ * The rock the whole thing is anchored to, so the coral is not floating.
+ *
+ * It has to span the whole drop from the seed down to the sand, which is a
+ * long way, and a single tapered cylinder covers that distance by reading as a
+ * machined pillar. So it is stacked out of flat-shaded chunks instead, each one
+ * turned and offset off the axis: the silhouette breaks up and the thing reads
+ * as a spire the reef grew on.
+ *
+ * The tones come out of the palette's stone ramp, which is the whole trick. It
+ * used to be painted a deep blue, and a deep blue is a colour the palette can
+ * only say as water: the pixel pass quantised every face of it onto a water
+ * swatch and the rock came back as a hole cut out of the reef. Lit stone has to
+ * be given stone to land on. The chunks are also flattened rather than round,
+ * because the key light is overhead - upward-facing faces are the only ones
+ * that catch it, and a stack of spheres presents almost none of them.
+ */
+const SPIRE_TONES = ['#8a8a78', '#7b8071', '#6c7468', '#5d6a60']
+
 function Pedestal() {
-  const height = -0.6 - FLOOR_Y
+  const chunks = useMemo(() => {
+    const top = -0.6
+    const rand = rng(911)
+    const out: {
+      position: [number, number, number]
+      rotation: [number, number, number]
+      scale: [number, number, number]
+      color: string
+    }[] = []
+
+    const count = 9
+    for (let i = 0; i < count; i++) {
+      // t runs 0 at the sand to 1 at the seed, so the stack tapers upward
+      const t = i / (count - 1)
+      const y = FLOOR_Y + (top - FLOOR_Y) * t
+      const width = 3.1 - t * 1.7
+      // the lean is small and grows with height: enough to break the axis,
+      // not enough to look like it is falling over
+      const lean = t * 0.55
+      // flat enough to catch the overhead key, deep enough that consecutive
+      // chunks still overlap and the stack reads as one rock rather than a pile
+      const squash = 0.62 + rand() * 0.16
+      out.push({
+        position: [Math.cos(i * 2.4) * lean, y, Math.sin(i * 2.4) * lean],
+        rotation: [rand() * 0.4 - 0.2, rand() * Math.PI, rand() * 0.4 - 0.2],
+        scale: [width, width * squash, width * (0.82 + rand() * 0.4)],
+        color: SPIRE_TONES[i % SPIRE_TONES.length],
+      })
+    }
+    return out
+  }, [])
+
   return (
-    <mesh position={[0, FLOOR_Y + height / 2, 0]} raycast={() => null}>
-      <cylinderGeometry args={[0.85, 2.6, height, 9, 1]} />
-      <meshStandardMaterial color="#123A55" roughness={0.95} metalness={0} flatShading />
-    </mesh>
+    <group raycast={() => null}>
+      {chunks.map((chunk, i) => (
+        <mesh
+          key={i}
+          position={chunk.position}
+          rotation={chunk.rotation}
+          scale={chunk.scale}
+          raycast={() => null}
+        >
+          <icosahedronGeometry args={[1, 0]} />
+          <meshStandardMaterial color={chunk.color} roughness={0.95} metalness={0} flatShading />
+        </mesh>
+      ))}
+    </group>
   )
 }
 

@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { FLOOR_Y, SEA, rng } from '../lib/sea'
-import { SOFT, SPRITE_HEIGHT, type Sprite, type SpriteKind, reefSprite } from '../lib/sprites'
+import { reefLibrary } from '../lib/reefLibrary'
+import { SOFT, SPRITE_HEIGHT, type SpriteKind } from '../lib/sprites'
 import { Fish } from './Fish'
+import { ReefField, type Piece } from './ReefField'
 
 export { FLOOR_Y }
 
@@ -93,205 +95,52 @@ function Seafloor() {
  * Mounds are the one part of the seabed that is real geometry rather than a
  * card, and being lit and solid is exactly the point: a billboard cannot tell
  * you the ground is not flat, and without that the reef sits on a sheet of
- * glass. They also give the cards something to stand on and hide behind.
+ * glass. One instanced mesh, so thirty-four of them still cost one call.
  */
+const MOUND_COUNT = 34
+
 function Mounds() {
-  const mounds = useMemo(() => {
+  const ref = useRef<THREE.InstancedMesh>(null)
+
+  useEffect(() => {
+    const mesh = ref.current
+    if (!mesh) return
     const rand = rng(4457)
-    // kept close to the floor shader's own sand, and never wider than they are
-    // tall by much: a broad flat dome catches the key light across its whole
-    // top and reads as a puddle of light rather than as ground
-    const tones = ['#24455A', '#1E3F52', '#2B506A', '#1A3849']
-    return Array.from({ length: 14 }, (_, i) => {
-      const a = (i / 14) * Math.PI * 2 + rand() * 0.7
-      const r = 13 + rand() * 28
-      const w = 3.5 + rand() * 5
-      const h = 2 + rand() * 3.4
-      return {
-        key: i,
-        position: [Math.cos(a) * r, FLOOR_Y - h * 0.35, Math.sin(a) * r] as [number, number, number],
-        scale: [w, h, w * (0.7 + rand() * 0.6)] as [number, number, number],
-        rotation: [rand() * 0.3, rand() * Math.PI, rand() * 0.3] as [number, number, number],
-        color: tones[Math.floor(rand() * tones.length)],
-      }
-    })
+    // stone, not water. These used to be deep blues, and the palette can only
+    // say a deep blue as water: every mound quantised onto a water swatch and
+    // the ground the reef stands on came back as a patch of murk. The darker
+    // half of the stone ramp keeps them reading as rock while staying behind
+    // the sprites standing on them.
+    const tones = ['#4a5560', '#424f5b', '#55605e', '#3b4852', '#4e5a57']
+    const matrix = new THREE.Matrix4()
+    const quaternion = new THREE.Quaternion()
+    const euler = new THREE.Euler()
+    const position = new THREE.Vector3()
+    const scale = new THREE.Vector3()
+    const color = new THREE.Color()
+
+    for (let i = 0; i < MOUND_COUNT; i++) {
+      const a = (i / MOUND_COUNT) * Math.PI * 2 + rand() * 0.8
+      const r = 11 + Math.sqrt(rand()) * 46
+      const w = 3.5 + rand() * 7
+      const h = 1.8 + rand() * 4
+      euler.set(rand() * 0.3, rand() * Math.PI, rand() * 0.3)
+      position.set(Math.cos(a) * r, FLOOR_Y - h * 0.35, Math.sin(a) * r)
+      scale.set(w, h, w * (0.7 + rand() * 0.6))
+      matrix.compose(position, quaternion.setFromEuler(euler), scale)
+      mesh.setMatrixAt(i, matrix)
+      mesh.setColorAt(i, color.set(tones[Math.floor(rand() * tones.length)]))
+    }
+    mesh.instanceMatrix.needsUpdate = true
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+    mesh.computeBoundingSphere()
   }, [])
 
   return (
-    <>
-      {mounds.map((m) => (
-        <mesh
-          key={m.key}
-          position={m.position}
-          scale={m.scale}
-          rotation={m.rotation}
-          raycast={() => null}
-        >
-          <icosahedronGeometry args={[1, 1]} />
-          <meshStandardMaterial color={m.color} roughness={0.96} metalness={0} flatShading />
-        </mesh>
-      ))}
-    </>
-  )
-}
-
-type Spot = { angle: number; radius: number; scale: number }
-
-/**
- * Reef life clumps. Scattering evenly over a ring gives a lawn, and a lawn is
- * the thing a reef is least like: colonies crowd onto whatever hard ground
- * they can get and leave open sand between. So placement picks a dozen
- * thickets and grows everything around those.
- */
-function clumpSpots(seed: number, count: number, inner: number, outer: number): Spot[] {
-  const rand = rng(seed)
-  const centres = Array.from({ length: 17 }, () => ({
-    angle: rand() * Math.PI * 2,
-    radius: inner + Math.sqrt(rand()) * (outer - inner),
-  }))
-  return Array.from({ length: count }, () => {
-    const c = centres[Math.floor(rand() * centres.length)]
-    const spread = 2.2 + rand() * 3.6
-    const off = rand() * Math.PI * 2
-    const radius = Math.max(inner * 0.85, c.radius + Math.cos(off) * spread)
-    return {
-      angle: c.angle + (Math.sin(off) * spread) / radius,
-      radius,
-      scale: 0.8 + rand() * 0.5,
-    }
-  })
-}
-
-/** An even ring, which is what the distance bands want: a horizon, not clumps. */
-function ringSpots(seed: number, count: number, radius: number, spread: number): Spot[] {
-  const rand = rng(seed)
-  return Array.from({ length: count }, (_, i) => ({
-    angle: (i / count) * Math.PI * 2 + rand() * 0.4,
-    radius: radius + (rand() - 0.5) * spread,
-    scale: 1.4 + rand() * 1.1,
-  }))
-}
-
-type Card = {
-  key: string
-  kind: SpriteKind
-  index: number
-  position: [number, number, number]
-  height: number
-  flip: number
-  sway: number
-}
-
-type Patch = { sprites: Sprite[]; cards: Card[] }
-
-/**
- * Builds a sprite set and the cards that use it. Sprites are shared across
- * every card that references them, so a hundred pieces of reef cost a couple
- * of dozen small canvases rather than a hundred.
- */
-function buildPatch(
-  seed: number,
-  kinds: readonly SpriteKind[],
-  variants: number,
-  spots: Spot[],
-): Patch {
-  const rand = rng(seed * 7919 + 13)
-  const sprites: Sprite[] = []
-  const byKind = new Map<SpriteKind, number[]>()
-  kinds.forEach((kind, k) => {
-    const list: number[] = []
-    for (let v = 0; v < variants; v++) {
-      list.push(sprites.length)
-      sprites.push(reefSprite(kind, seed * 977 + k * 131 + v * 17))
-    }
-    byKind.set(kind, list)
-  })
-
-  const cards = spots.map((spot, i) => {
-    const kind = kinds[Math.floor(rand() * kinds.length)]
-    const list = byKind.get(kind)!
-    const [lo, hi] = SPRITE_HEIGHT[kind]
-    const height = (lo + rand() * (hi - lo)) * spot.scale
-    return {
-      key: `${seed}-${i}`,
-      kind,
-      index: list[Math.floor(rand() * list.length)],
-      position: [
-        Math.cos(spot.angle) * spot.radius,
-        FLOOR_Y + height / 2 - height * 0.06,
-        Math.sin(spot.angle) * spot.radius,
-      ] as [number, number, number],
-      height,
-      flip: rand() < 0.5 ? -1 : 1,
-      sway: rand(),
-    }
-  })
-
-  return { sprites, cards }
-}
-
-/** Cards standing on the sand, billboarded around Y and swaying if they are soft. */
-function Scatter({
-  patch,
-  tint,
-  sway = 0.05,
-}: {
-  patch: Patch
-  tint: string
-  sway?: number
-}) {
-  const group = useRef<THREE.Group>(null)
-  const { cards, sprites } = patch
-
-  useEffect(
-    () => () => {
-      for (const s of sprites) s.texture.dispose()
-    },
-    [sprites],
-  )
-
-  useFrame(({ clock, camera }) => {
-    const g = group.current
-    if (!g) return
-    const t = clock.elapsedTime
-    for (let i = 0; i < cards.length; i++) {
-      const child = g.children[i]
-      const card = cards[i]
-      if (!child) continue
-      child.rotation.y = Math.atan2(
-        camera.position.x - child.position.x,
-        camera.position.z - child.position.z,
-      )
-      // only the soft things move, and slowly: a swaying rock is a bouncy ball
-      if (SOFT.has(card.kind)) child.rotation.z = Math.sin(t * 0.34 + card.sway * 9) * sway
-    }
-  })
-
-  return (
-    <group ref={group}>
-      {cards.map((c) => {
-        const sprite = sprites[c.index]
-        return (
-          <mesh
-            key={c.key}
-            position={c.position}
-            scale={[c.height * sprite.aspect * c.flip, c.height, 1]}
-            raycast={() => null}
-          >
-            <planeGeometry args={[1, 1]} />
-            <meshBasicMaterial
-              map={sprite.texture}
-              color={tint}
-              // alphaTest instead of transparency: a cut-out keeps the pixel edge
-              // hard and keeps the depth buffer honest between overlapping cards
-              alphaTest={0.5}
-              side={THREE.DoubleSide}
-              fog
-            />
-          </mesh>
-        )
-      })}
-    </group>
+    <instancedMesh ref={ref} args={[undefined, undefined, MOUND_COUNT]} raycast={() => null}>
+      <icosahedronGeometry args={[1, 1]} />
+      <meshStandardMaterial roughness={0.96} metalness={0} flatShading />
+    </instancedMesh>
   )
 }
 
@@ -410,53 +259,241 @@ function Drift({
   )
 }
 
-const GARDEN_KINDS: SpriteKind[] = [
-  'staghorn',
-  'brain',
-  'table',
-  'fan',
-  'tube',
-  'barrel',
-  'bubble',
-  'polyps',
-  'toadstool',
-  'anemone',
-  'seagrass',
-  'kelp',
-  'rock',
-  'boulder',
+/** Weighted draws, so a thicket comes out mostly coral and a meadow mostly grass. */
+type Mix = [SpriteKind, number][]
+
+const THICKET: Mix = [
+  ['staghorn', 10],
+  ['brain', 6],
+  ['table', 6],
+  ['fan', 8],
+  ['tube', 7],
+  ['barrel', 5],
+  ['bubble', 6],
+  ['polyps', 7],
+  ['toadstool', 6],
+  ['anemone', 7],
+  ['seaweed', 6],
+  ['seagrass', 6],
+  ['kelp', 5],
+  ['rock', 7],
+  ['boulder', 6],
 ]
 
-const TRINKET_KINDS: SpriteKind[] = ['star', 'shell', 'urchin', 'clam']
+const MEADOW: Mix = [
+  ['grass', 30],
+  ['seagrass', 7],
+  ['seaweed', 2],
+  ['star', 1],
+  ['shell', 1],
+]
 
-/** The bands are read as a skyline, so only shapes that survive at that size. */
-const BAND_KINDS: SpriteKind[] = ['rock', 'boulder', 'staghorn', 'fan', 'kelp', 'tube', 'brain', 'table']
+const TRINKETS: Mix = [
+  ['star', 3],
+  ['shell', 3],
+  ['urchin', 3],
+  ['clam', 2],
+  ['polyps', 2],
+]
+
+/** The distance bands read as a skyline: only shapes that survive at that size. */
+const BAND: Mix = [
+  ['rock', 10],
+  ['boulder', 7],
+  ['staghorn', 7],
+  ['fan', 6],
+  ['kelp', 7],
+  ['forest', 5],
+  ['tube', 5],
+  ['brain', 4],
+  ['table', 4],
+  ['spire', 3],
+]
+
+const SKYLINE: Mix = [
+  ['ridge', 10],
+  ['spire', 8],
+  ['forest', 7],
+  ['rock', 6],
+  ['kelp', 4],
+  ['staghorn', 3],
+]
+
+function draw(mix: Mix, rand: () => number): SpriteKind {
+  const total = mix.reduce((sum, [, weight]) => sum + weight, 0)
+  let roll = rand() * total
+  for (const [kind, weight] of mix) {
+    roll -= weight
+    if (roll <= 0) return kind
+  }
+  return mix[0][0]
+}
+
+type Layer = {
+  mix: Mix
+  count: number
+  inner: number
+  outer: number
+  /** how many thickets this layer grows around */
+  clusters: number
+  /** how far a piece can sit from its thicket's centre */
+  spread: number
+  /** multiplier range on each kind's natural height */
+  scale: [number, number]
+  tint: string
+  silhouette?: boolean
+  sway?: number
+}
+
+/**
+ * Colonies crowd onto whatever hard ground they can reach and leave open sand
+ * between, so everything grows around a set of centres rather than being
+ * sprayed evenly. An even spread is the one distribution a reef never has: it
+ * reads as a lawn, and the gaps between thickets are what make density feel
+ * placed rather than generated.
+ */
+function scatter(seed: number, layers: Layer[]): Piece[] {
+  const lib = reefLibrary()
+  const rand = rng(seed)
+  const pieces: Piece[] = []
+  const tints = new Map<string, THREE.Color>()
+
+  for (const layer of layers) {
+    let tint = tints.get(layer.tint)
+    if (!tint) {
+      tint = new THREE.Color(layer.tint)
+      tints.set(layer.tint, tint)
+    }
+
+    const centres = Array.from({ length: layer.clusters }, () => ({
+      angle: rand() * Math.PI * 2,
+      radius: layer.inner + Math.sqrt(rand()) * (layer.outer - layer.inner),
+    }))
+
+    for (let i = 0; i < layer.count; i++) {
+      const centre = centres[Math.floor(rand() * centres.length)]
+      const off = rand() * Math.PI * 2
+      const reach = Math.sqrt(rand()) * layer.spread
+      const radius = Math.max(layer.inner * 0.8, centre.radius + Math.cos(off) * reach)
+      const angle = centre.angle + (Math.sin(off) * reach) / Math.max(1, radius)
+
+      const kind = draw(layer.mix, rand)
+      const frames = lib.frames[kind]
+      const [lo, hi] = SPRITE_HEIGHT[kind]
+      const spread = layer.scale[1] - layer.scale[0]
+      const height = (lo + rand() * (hi - lo)) * (layer.scale[0] + rand() * spread)
+
+      pieces.push({
+        position: [Math.cos(angle) * radius, FLOOR_Y - height * 0.04, Math.sin(angle) * radius],
+        frame: frames[Math.floor(rand() * frames.length)],
+        height,
+        flip: rand() < 0.5,
+        sway: rand(),
+        swayAmount: SOFT.has(kind) ? (layer.sway ?? 0.05) : 0,
+        tint,
+        silhouette: layer.silhouette,
+      })
+    }
+  }
+
+  return pieces
+}
+
+const FIELD_RADIUS = 170
 
 export function Reef() {
-  const garden = useMemo(() => buildPatch(31, GARDEN_KINDS, 3, clumpSpots(8123, 96, 6, 32)), [])
-  const trinkets = useMemo(() => buildPatch(53, TRINKET_KINDS, 2, clumpSpots(5519, 30, 6, 30)), [])
-  const near = useMemo(() => buildPatch(3, BAND_KINDS, 2, ringSpots(101, 11, 36, 10)), [])
-  const mid = useMemo(() => buildPatch(11, BAND_KINDS, 2, ringSpots(211, 14, 58, 15)), [])
-  const far = useMemo(() => buildPatch(29, BAND_KINDS, 2, ringSpots(307, 20, 94, 26)), [])
+  const library = reefLibrary()
+
+  const pieces = useMemo(
+    () =>
+      scatter(8123, [
+        // the meadow goes down first: broad beds of grass for everything else
+        // to stand in, rather than bare sand with things dotted on it
+        {
+          mix: MEADOW,
+          count: 520,
+          inner: 6,
+          outer: 40,
+          clusters: 14,
+          spread: 9,
+          scale: [0.8, 1.5],
+          tint: '#FFFFFF',
+          sway: 0.09,
+        },
+        {
+          mix: THICKET,
+          count: 300,
+          inner: 6,
+          outer: 34,
+          clusters: 20,
+          spread: 5,
+          scale: [0.8, 1.35],
+          tint: '#FFFFFF',
+        },
+        {
+          mix: TRINKETS,
+          count: 80,
+          inner: 6,
+          outer: 34,
+          clusters: 22,
+          spread: 6,
+          scale: [0.9, 1.4],
+          tint: '#FFFFFF',
+        },
+        {
+          mix: THICKET,
+          count: 130,
+          inner: 34,
+          outer: 52,
+          clusters: 16,
+          spread: 8,
+          scale: [1.3, 2.2],
+          tint: '#EAF4F9',
+        },
+        {
+          mix: BAND,
+          count: 120,
+          inner: 52,
+          outer: 78,
+          clusters: 14,
+          spread: 11,
+          scale: [1.8, 3.2],
+          tint: '#D2E6F1',
+        },
+        // the shadowy far shapes. Two rings, the nearer one darker, so the haze
+        // between them reads as distance instead of as one flat backdrop
+        {
+          mix: SKYLINE,
+          count: 54,
+          inner: 84,
+          outer: 112,
+          clusters: 11,
+          spread: 16,
+          scale: [1.0, 1.9],
+          tint: '#0A2740',
+          silhouette: true,
+        },
+        {
+          mix: SKYLINE,
+          count: 40,
+          inner: 118,
+          outer: 146,
+          clusters: 9,
+          spread: 20,
+          scale: [1.6, 2.8],
+          tint: '#0E3355',
+          silhouette: true,
+        },
+      ]),
+    [],
+  )
 
   return (
     <>
       <Seafloor />
       <Mounds />
 
-      {/* the garden is close enough to keep its own colour; nothing is tinted
-          away from what the sprite generator chose */}
-      <Scatter patch={garden} tint="#FFFFFF" sway={0.06} />
-      <Scatter patch={trinkets} tint="#FFFFFF" />
-
-      {/* near, mid, far. The tint only cools each band slightly; the fog does
-          the real distance work. Tinting hard turns the bands black instead of
-          hazy, because a colour multiply can only ever darken, and under water
-          distance means haze and lost colour, not shadow. */}
-      <Scatter patch={near} tint="#E4F0F6" sway={0.04} />
-      <Scatter patch={mid} tint="#C6DDEA" sway={0.03} />
-      <Scatter patch={far} tint="#AECEE0" sway={0.02} />
-
+      <ReefField pieces={pieces} atlas={library.atlas} radius={FIELD_RADIUS} />
       <Fish />
 
       <Drift

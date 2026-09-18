@@ -1,5 +1,4 @@
-import * as THREE from 'three'
-import { pixelCanvas, rng, toTexture } from './sea'
+import { pixelCanvas, rng } from './sea'
 
 /**
  * The reef's cast of sprites, generated at runtime rather than shipped as art.
@@ -61,8 +60,12 @@ function rgb(hex: string): [number, number, number] {
  * A sprite carries its own aspect so the scene can pick a height and get the
  * width for free. Scaling a card to an arbitrary rectangle is what makes
  * generated pixel art look melted.
+ *
+ * It hands back a canvas rather than a texture because every sprite ends up
+ * packed into one atlas: a texture each would mean a material each, and a
+ * material each means a draw call each.
  */
-export type Sprite = { texture: THREE.Texture; aspect: number }
+export type Sprite = { canvas: HTMLCanvasElement; aspect: number }
 
 /**
  * Writing bytes into one ImageData beats fillRect per pixel by enough to matter
@@ -150,7 +153,7 @@ function painter(w: number, h: number) {
 
   const finish = (): Sprite => {
     ctx.putImageData(img, 0, 0)
-    return { texture: toTexture(canvas), aspect: w / h }
+    return { canvas, aspect: w / h }
   }
 
   return { px, clear, rect, disc, weave, outline, finish, w, h }
@@ -533,22 +536,97 @@ function anemone(rand: () => number): Sprite {
   return p.finish()
 }
 
-/** Seagrass: blades from one root, each tapering to a single cell. */
-function seagrass(rand: () => number): Sprite {
-  const p = painter(38, 42)
-  const ramp = RAMPS[pick(rand, ['jade', 'lime'] as RampName[])]
-  const blades = 7 + Math.floor(rand() * 7)
-  for (let i = 0; i < blades; i++) {
-    const lean = (rand() - 0.5) * 1.5
-    const len = p.h * (0.45 + rand() * 0.5)
-    let x = p.w / 2 + (rand() - 0.5) * 9
+/**
+ * Seagrass. Blades from one root, each tapering to a single cell and each with
+ * its own lean, because a bed of identically-leaning blades reads as a comb.
+ * A couple of blades in the second ramp is what keeps a big meadow from
+ * banding into one flat green.
+ */
+function blades(
+  p: Painter,
+  count: number,
+  rootWidth: number,
+  minLen: number,
+  maxLen: number,
+  ramp: Ramp,
+  alt: Ramp,
+  rand: () => number,
+) {
+  for (let i = 0; i < count; i++) {
+    const c = rand() < 0.22 ? alt : ramp
+    const lean = (rand() - 0.5) * 1.7
+    const len = p.h * (minLen + rand() * (maxLen - minLen))
+    const curve = 0.6 + rand() * 0.9
+    let x = p.w / 2 + (rand() - 0.5) * rootWidth
     let y = p.h - 1
     for (let s = 0; s < len; s++) {
       const k = s / len
-      x += lean * 0.1 + Math.sin(k * 3 + i) * 0.1
+      // the lean builds with height instead of being constant, so a blade
+      // bends away from the root the way a leaf does rather than tilting
+      x += lean * 0.14 * (0.3 + k * curve)
       y -= 1
-      const th = k < 0.55 ? 2 : 1
-      for (let t = 0; t < th; t++) p.px(x + t, y, t === 0 ? ramp.mid : ramp.light)
+      const th = k < 0.5 ? 2 : 1
+      for (let t = 0; t < th; t++) {
+        p.px(x + t, y, k > 0.86 ? c.light : t === 0 ? c.mid : c.light)
+      }
+    }
+  }
+}
+
+function seagrass(rand: () => number): Sprite {
+  const p = painter(40, 46)
+  const ramp = RAMPS[pick(rand, ['jade', 'lime'] as RampName[])]
+  const alt = RAMPS[pick(rand, ['jade', 'lime', 'sun'] as RampName[])]
+  blades(p, 12 + Math.floor(rand() * 8), 11, 0.5, 0.96, ramp, alt, rand)
+  p.outline()
+  return p.finish()
+}
+
+/**
+ * A grass tuft: shorter, wider and much denser than a seagrass clump, meant to
+ * be tiled in the hundreds across the sand. Meadows are the one place a lawn
+ * is the right answer, so these are made to overlap into a continuous bed.
+ */
+function grass(rand: () => number): Sprite {
+  const p = painter(34, 24)
+  const ramp = RAMPS[pick(rand, ['jade', 'lime'] as RampName[])]
+  const alt = RAMPS[pick(rand, ['jade', 'lime'] as RampName[])]
+  blades(p, 16 + Math.floor(rand() * 10), 22, 0.45, 1.0, ramp, alt, rand)
+  p.outline()
+  return p.finish()
+}
+
+/**
+ * Seaweed: a stalk hung with broad wavy fronds. It is the wide-leaved
+ * counterweight to kelp's strands, and reads completely differently at a
+ * distance, which is the only reason to have both.
+ */
+function seaweed(rand: () => number): Sprite {
+  const p = painter(36, 50)
+  const ramp = RAMPS[pick(rand, ['jade', 'lime'] as RampName[])]
+  const stalkX = p.w / 2 + (rand() - 0.5) * 5
+  const top = 4 + rand() * 8
+  const amp = 1.5 + rand() * 2.5
+  const freq = 0.14 + rand() * 0.07
+  const phase = rand() * 6.28
+
+  for (let y = p.h - 1; y > top; y--) {
+    const k = (p.h - y) / p.h
+    const x = stalkX + Math.sin(y * freq + phase) * amp * k
+    p.px(x, y, ramp.shade)
+    p.px(x + 1, y, ramp.mid)
+
+    if ((y - Math.round(top)) % 6 === 0 && k > 0.12) {
+      const side = ((y / 6) | 0) % 2 === 0 ? 1 : -1
+      const span = 4 + Math.round(rand() * 5)
+      for (let b = 1; b <= span; b++) {
+        const droop = Math.round(b * 0.55)
+        const thick = b < span - 1 ? 3 : 2
+        for (let t = 0; t < thick; t++) {
+          const fx = x + side * b + (side > 0 ? 1 : 0)
+          p.px(fx, y - 2 + droop + t, t === 0 ? ramp.light : ramp.mid)
+        }
+      }
     }
   }
   p.outline()
@@ -804,6 +882,91 @@ function clam(rand: () => number): Sprite {
   return p.finish()
 }
 
+/**
+ * The far shapes. These exist to be read at a hundred metres as dark cut-outs
+ * against the haze, so they are designed as silhouettes first: a skyline that
+ * still says something with every interior detail thrown away. Their colour is
+ * drawn anyway, because the same shapes make good mid-distance scenery.
+ */
+function spire(rand: () => number): Sprite {
+  const p = painter(36, 90)
+  const stone = rand() < 0.5 ? STONE_WARM : STONE
+  const cx = p.w / 2
+  let half = 2 + rand() * 2
+  const tops: number[] = []
+
+  for (let y = 2; y < p.h; y++) {
+    const k = (y - 2) / (p.h - 2)
+    half = 1.5 + Math.pow(k, 1.35) * (p.w / 2 - 3)
+    // ledges: a pinnacle that only tapers is a traffic cone
+    const step = Math.sin(y * 0.24 + rand() * 0.02) > 0.7 ? 2.5 : 0
+    const lean = Math.sin(k * 2.4) * 3
+    for (let x = cx - half - step + lean; x <= cx + half + step + lean; x++) {
+      const across = (x - (cx - half + lean)) / Math.max(1, half * 2)
+      p.px(x, y, across < 0.24 ? stone.light : across > 0.78 ? stone.shade : stone.mid)
+    }
+    tops[y] = half
+  }
+  p.outline()
+  return p.finish()
+}
+
+function ridge(rand: () => number): Sprite {
+  const p = painter(128, 58)
+  const stone = rand() < 0.5 ? STONE_WARM : STONE
+  const peaks = 3 + Math.floor(rand() * 3)
+  const centres = Array.from({ length: peaks }, (_, i) => ({
+    x: ((i + 0.5) / peaks) * p.w + (rand() - 0.5) * 14,
+    h: p.h * (0.45 + rand() * 0.52),
+    w: 16 + rand() * 22,
+  }))
+
+  for (let x = 1; x < p.w - 1; x++) {
+    let top = p.h
+    for (const c of centres) {
+      const d = Math.abs(x - c.x) / c.w
+      if (d > 1) continue
+      // a cosine shoulder, flattened at the crest, gives a massif rather than
+      // a row of identical cones
+      const rise = c.h * Math.pow(Math.cos((d * Math.PI) / 2), 0.7)
+      top = Math.min(top, p.h - Math.round(rise))
+    }
+    const notch = Math.sin(x * 0.42) > 0.85 ? 2 : 0
+    for (let y = top + notch; y < p.h; y++) {
+      p.px(x, y, y < top + notch + 2 ? stone.light : y > p.h - 5 ? stone.shade : stone.mid)
+    }
+  }
+  p.outline()
+  return p.finish()
+}
+
+function forest(rand: () => number): Sprite {
+  const p = painter(64, 96)
+  const ramp = RAMPS[pick(rand, ['jade', 'lime'] as RampName[])]
+  const strands = 7 + Math.floor(rand() * 5)
+  for (let s = 0; s < strands; s++) {
+    const baseX = 4 + rand() * (p.w - 8)
+    const amp = 2 + rand() * 5
+    const freq = 0.07 + rand() * 0.06
+    const top = p.h * (0.02 + rand() * 0.34)
+    const phase = rand() * 6.28
+    for (let y = p.h - 1; y > top; y--) {
+      const k = (p.h - y) / p.h
+      const x = baseX + Math.sin(y * freq + phase) * amp * k
+      p.px(x, y, ramp.shade)
+      p.px(x + 1, y, ramp.mid)
+      if (y % 9 === 0) {
+        const side = y % 18 === 0 ? 1 : -1
+        for (let b = 1; b <= 3 + Math.round(rand() * 3); b++) {
+          p.px(x + side * b + (side > 0 ? 1 : 0), y - Math.round(b * 0.5), ramp.light)
+        }
+      }
+    }
+  }
+  p.outline()
+  return p.finish()
+}
+
 export type SpriteKind =
   | 'staghorn'
   | 'brain'
@@ -816,6 +979,8 @@ export type SpriteKind =
   | 'toadstool'
   | 'anemone'
   | 'seagrass'
+  | 'grass'
+  | 'seaweed'
   | 'kelp'
   | 'rock'
   | 'boulder'
@@ -823,6 +988,9 @@ export type SpriteKind =
   | 'shell'
   | 'urchin'
   | 'clam'
+  | 'spire'
+  | 'ridge'
+  | 'forest'
 
 const MAKERS: Record<SpriteKind, (rand: () => number) => Sprite> = {
   staghorn,
@@ -836,6 +1004,8 @@ const MAKERS: Record<SpriteKind, (rand: () => number) => Sprite> = {
   toadstool,
   anemone,
   seagrass,
+  grass,
+  seaweed,
   kelp,
   rock,
   boulder,
@@ -843,6 +1013,9 @@ const MAKERS: Record<SpriteKind, (rand: () => number) => Sprite> = {
   shell,
   urchin,
   clam,
+  spire,
+  ridge,
+  forest,
 }
 
 /** Anything with flesh or a blade in it sways; rock does not, because a swaying rock is a balloon. */
@@ -853,7 +1026,10 @@ export const SOFT: ReadonlySet<SpriteKind> = new Set<SpriteKind>([
   'toadstool',
   'anemone',
   'seagrass',
+  'grass',
+  'seaweed',
   'kelp',
+  'forest',
   'tube',
 ])
 
@@ -874,6 +1050,8 @@ export const SPRITE_HEIGHT: Record<SpriteKind, [number, number]> = {
   toadstool: [1.6, 3.0],
   anemone: [1.2, 2.4],
   seagrass: [1.4, 2.8],
+  grass: [0.7, 1.5],
+  seaweed: [2.0, 4.0],
   kelp: [4.0, 8.5],
   rock: [1.8, 4.0],
   boulder: [1.4, 3.2],
@@ -881,4 +1059,7 @@ export const SPRITE_HEIGHT: Record<SpriteKind, [number, number]> = {
   shell: [0.6, 1.0],
   urchin: [0.7, 1.2],
   clam: [0.8, 1.3],
+  spire: [14, 30],
+  ridge: [10, 22],
+  forest: [10, 20],
 }

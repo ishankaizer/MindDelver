@@ -1,4 +1,4 @@
-import { pixelCanvas, rng, toTexture } from './sea'
+import { pixelCanvas, rng } from './sea'
 import type { Sprite } from './sprites'
 
 /**
@@ -150,7 +150,7 @@ export function fishSprite(speciesIndex: number, seed: number): Sprite {
   }
 
   ctx.putImageData(img, 0, 0)
-  const texture = toTexture(canvas)
-  texture.repeat.set(0.5, 1)
-  return { texture, aspect: FRAME_W / FRAME_H }
+  // the aspect describes one frame, not the whole strip: it is what the scene
+  // sizes a fish by, and a fish is never two frames wide
+  return { canvas, aspect: FRAME_W / FRAME_H }
 }
