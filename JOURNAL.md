@@ -10,6 +10,57 @@ you did.
 
 ---
 
+## 2026-09-18 (fifth session): mobile pass
+
+Asked to make the whole app work on a phone, controls included. Checked first:
+the actual interaction logic (`Blob.tsx`'s `onClick`) already worked on touch,
+since a tap fires the same click event a mouse does, and the detail card
+already carries "branch out" / "add to mix" buttons that don't need a
+keyboard or a shift key. So this was a layout and copy problem, not a logic
+one, and nothing about the coral, the facets, or the interaction model was
+touched.
+
+**What changed:**
+- `Scene.tsx`: `OrbitControls` gets an explicit `touches` prop (one finger
+  rotate, two finger dolly-pan) instead of relying on the library default.
+- `Hud.tsx`: the four corner panels (brief, legend, detail card, mix tray,
+  control bar) are now wrapped in two new divs, `.hud__top` and `.hud__dock`.
+  They do nothing on desktop. Below 680px they become the positioned
+  elements and their children go static and stack in a column, which is
+  what stops four absolutely-positioned corners from overlapping on a phone
+  screen.
+- `Guide.tsx`: added `usePointerCoarse()` off `matchMedia('(pointer:
+  coarse)')`, and both the guide overlay and the always-on control bar now
+  read from it to swap "shift-click" / "hover" / "right-click" for "hold" /
+  "tap" / touch-only copy. Mouse-only verbs on a screen with no mouse were
+  the main thing actually broken.
+- `index.html`: viewport meta gained `maximum-scale=1, user-scalable=no,
+  viewport-fit=cover` so native pinch-zoom does not fight OrbitControls' own
+  pinch-to-dolly, and the two docks pad themselves with
+  `env(safe-area-inset-*)` so they clear a notch or home indicator.
+- `global.css`: the actual mobile media query, `max-width: 680px`, is where
+  all of the above gets its stacking, safe-area padding, and touch-target
+  sizing (`@media (pointer: coarse) { button { min-height: 44px } }` already
+  existed and needed no change).
+
+**Verified.** `npm install` (node_modules was not present in this session's
+container), `npx tsc -b` clean, `npm run dev` on port 5180, then screenshotted
+with the pre-installed headless Chromium at a 390x844 viewport with
+`hasTouch`/`isMobile` set so `(pointer: coarse)` actually matched. Confirmed:
+no panel overlap, safe-area padding holds, guide and control bar render the
+touch copy. Datamuse (`api.datamuse.com`) is blocked by this container's
+egress policy, so growth fell back to the local `brainData` prior during the
+screenshot pass; that is a sandbox network restriction, not something this
+session's changes touch or broke.
+
+Not done: no separate "mobile app" build or PWA manifest, since the ask was
+the existing web app working well on a phone, which is what a viewport meta
+change and a responsive layout get to. If Ishan wants it installable to a
+home screen as its own icon, that is a manifest.json and a service worker,
+raised here rather than assumed.
+
+---
+
 ## 2026-09-18 (fourth session, brief)
 
 **Ishan is switching to Claude Code on his phone for a while**, no laptop

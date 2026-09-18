@@ -243,6 +243,9 @@ export function Scene() {
         minDistance={4}
         maxDistance={70}
         rotateSpeed={0.7}
+        // one finger swims, exactly like a mouse drag; two fingers pinch to
+        // dolly and pan at once, since a phone has no separate right-drag
+        touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
         // the coral grows upward, so looking up at it is the natural read;
         // the stop is there to keep the camera out of the seabed
         maxPolarAngle={Math.PI * 0.62}

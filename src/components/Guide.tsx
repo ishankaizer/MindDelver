@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PIXEL_GRADES, useGraph } from '../store/useGraph'
 
@@ -7,49 +8,95 @@ function Key({ children }: { children: React.ReactNode }) {
 
 type Row = { keys: React.ReactNode[]; text: string }
 
-const SECTIONS: { title: string; note?: string; rows: Row[] }[] = [
-  {
-    title: 'moving',
-    rows: [
-      { keys: ['drag'], text: 'swim around the reef' },
-      { keys: ['scroll'], text: 'closer, or further out' },
-      { keys: ['right-drag'], text: 'slide the view sideways' },
-      { keys: ['esc'], text: 'let go of whatever is selected' },
-    ],
-  },
-  {
-    title: 'growing',
-    note: 'every node splits six ways at once, one per facet. that is the whole point: you cannot go narrow by accident.',
-    rows: [
-      { keys: ['hover'], text: 'read a node that has no label yet' },
-      { keys: ['click'], text: 'select it, and branch it out' },
-      { keys: ['enter'], text: 'branch out whatever is selected' },
-    ],
-  },
-  {
-    title: 'combining',
-    note: 'the mix is where two or three branches get crossed into one concept. pick things that do not obviously belong together.',
-    rows: [
-      { keys: ['shift', 'click'], text: 'drop a node into the mix' },
-      { keys: ['right-click'], text: 'same thing, without the shift' },
-      { keys: ['m'], text: 'drop the selected node in' },
-      { keys: ['c'], text: 'combine what is in the mix' },
-      { keys: ['x'], text: 'empty the mix' },
-    ],
-  },
-  {
-    title: 'the look',
-    rows: [
-      { keys: ['p'], text: 'pixel grade: pixel, soft, clean' },
-      { keys: ['n'], text: 'start a new brief' },
-      { keys: ['?'], text: 'open and close this' },
-    ],
-  },
-]
+/**
+ * A phone has no hover, no shift key and no right-click, so the guide reads
+ * differently there: tapping a node already selects it (which is how a
+ * label gets read), and the mix and branch verbs live as buttons on the
+ * detail card instead of a modifier held down with a mouse.
+ */
+export function usePointerCoarse() {
+  const [coarse, setCoarse] = useState(
+    () => window.matchMedia('(pointer: coarse)').matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia('(pointer: coarse)')
+    const onChange = () => setCoarse(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return coarse
+}
+
+function sections(coarse: boolean): { title: string; note?: string; rows: Row[] }[] {
+  return [
+    {
+      title: 'moving',
+      rows: coarse
+        ? [
+            { keys: ['drag'], text: 'one finger swims around the reef' },
+            { keys: ['pinch'], text: 'closer, or further out' },
+            { keys: ['tap empty water'], text: 'let go of whatever is selected' },
+          ]
+        : [
+            { keys: ['drag'], text: 'swim around the reef' },
+            { keys: ['scroll'], text: 'closer, or further out' },
+            { keys: ['right-drag'], text: 'slide the view sideways' },
+            { keys: ['esc'], text: 'let go of whatever is selected' },
+          ],
+    },
+    {
+      title: 'growing',
+      note: 'every node splits six ways at once, one per facet. that is the whole point: you cannot go narrow by accident.',
+      rows: coarse
+        ? [
+            { keys: ['tap'], text: 'select a node and branch it out' },
+            { keys: ['branch out'], text: 'the same, from the card at the bottom' },
+          ]
+        : [
+            { keys: ['hover'], text: 'read a node that has no label yet' },
+            { keys: ['click'], text: 'select it, and branch it out' },
+            { keys: ['enter'], text: 'branch out whatever is selected' },
+          ],
+    },
+    {
+      title: 'combining',
+      note: 'the mix is where two or three branches get crossed into one concept. pick things that do not obviously belong together.',
+      rows: coarse
+        ? [
+            { keys: ['add to mix'], text: 'on the card, after selecting a node' },
+            { keys: ['hold'], text: 'a long press does the same, straight on the node' },
+            { keys: ['combine'], text: 'cross what is in the mix' },
+            { keys: ['clear'], text: 'empty the mix' },
+          ]
+        : [
+            { keys: ['shift', 'click'], text: 'drop a node into the mix' },
+            { keys: ['right-click'], text: 'same thing, without the shift' },
+            { keys: ['m'], text: 'drop the selected node in' },
+            { keys: ['c'], text: 'combine what is in the mix' },
+            { keys: ['x'], text: 'empty the mix' },
+          ],
+    },
+    {
+      title: 'the look',
+      rows: coarse
+        ? [
+            { keys: ['grade button'], text: 'pixel grade: pixel, soft, clean' },
+            { keys: ['new brief'], text: 'start over' },
+          ]
+        : [
+            { keys: ['p'], text: 'pixel grade: pixel, soft, clean' },
+            { keys: ['n'], text: 'start a new brief' },
+            { keys: ['?'], text: 'open and close this' },
+          ],
+    },
+  ]
+}
 
 export function Guide() {
   const open = useGraph((s) => s.guideOpen)
   const setOpen = useGraph((s) => s.setGuideOpen)
+  const coarse = usePointerCoarse()
+  const SECTIONS = sections(coarse)
 
   return (
     <AnimatePresence>
@@ -120,16 +167,25 @@ export function ControlBar() {
   const setOpen = useGraph((s) => s.setGuideOpen)
   const grade = useGraph((s) => s.pixelGrade)
   const setGrade = useGraph((s) => s.setPixelGrade)
+  const coarse = usePointerCoarse()
 
   return (
     <div className="controlbar">
       <span className="controlbar__item">
-        <Key>click</Key> branch out
+        <Key>{coarse ? 'tap' : 'click'}</Key> branch out
       </span>
       <span className="controlbar__sep" />
       <span className="controlbar__item">
-        <Key>shift</Key>
-        <Key>click</Key> add to the mix
+        {coarse ? (
+          <>
+            <Key>hold</Key> add to the mix
+          </>
+        ) : (
+          <>
+            <Key>shift</Key>
+            <Key>click</Key> add to the mix
+          </>
+        )}
       </span>
       <span className="controlbar__sep" />
       <span className="controlbar__item">

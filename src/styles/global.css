@@ -459,6 +459,110 @@ input {
   }
 }
 
+/* ---------- mobile layout ----------
+   Everything above is written for a mouse and a wide screen: corner panels at
+   fixed pixel offsets, widths in vw fractions that assume a lot of viewport to
+   fraction. On a phone those corners collide. `.hud__top` (brief + legend) and
+   `.hud__dock` (detail + mix + control bar) are plain unpositioned wrappers on
+   desktop, so nothing above changes; below this width they become the only
+   positioned elements and their children go static and stack in a column,
+   which is what turns four overlapping corners into two clean docks. */
+@media (max-width: 680px) {
+  .hud__top {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: var(--z-hud);
+  }
+
+  .hud__dock {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 76vh;
+    z-index: var(--z-hud);
+  }
+
+  .brief,
+  .legend-wrap,
+  .detail,
+  .mix,
+  .controlbar {
+    position: static;
+    width: 100%;
+    max-width: none;
+    left: auto;
+    right: auto;
+    top: auto;
+    bottom: auto;
+    transform: none;
+  }
+
+  .brief {
+    padding: 9px 10px;
+  }
+
+  .brief__text {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* the descriptive blurb is what makes the legend wide; drop it and the
+     colour key still does its job as a compact reference */
+  .legend__row {
+    grid-template-columns: 8px 1fr;
+  }
+
+  .legend__blurb {
+    display: none;
+  }
+
+  .keyslot {
+    width: 100%;
+  }
+
+  .detail {
+    order: 1;
+  }
+
+  .mix {
+    order: 2;
+  }
+
+  .controlbar {
+    order: 3;
+    justify-content: center;
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .controlbar__item,
+  .controlbar__sep {
+    display: none;
+  }
+
+  .guide__panel {
+    padding: var(--s-4) var(--s-4) var(--s-5);
+    max-height: 82vh;
+  }
+
+  .guide__section li {
+    grid-template-columns: 96px 1fr;
+  }
+}
+
 /* ---------- guide overlay ---------- */
 
 .guide {

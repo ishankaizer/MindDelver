@@ -23,8 +23,8 @@ export default function App() {
           toneMappingExposure: 1.05,
         }}
         onPointerMissed={() => select(null)}
-        // right-drag still pans; what goes is the browser menu that would
-        // otherwise cover the reef every time a node is added to the mix
+        // right-drag still pans, and on touch a long-press adds to the mix;
+        // what goes is the browser menu that would otherwise cover the reef
         onContextMenu={(e) => e.preventDefault()}
       >
         <Scene />

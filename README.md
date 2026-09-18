@@ -85,6 +85,37 @@ the mix is reachable three ways.
 Drag to swim. **Hovering a sphere is how you read an unlabelled node**, which is
 why the hint line says so.
 
+### Touch (phone / tablet)
+
+Nothing about the interaction model changes for touch: a tap fires the same
+`onClick` a mouse click does, so tap-to-select-and-branch and the detail
+card's "add to mix" / "branch out" buttons already worked before anything
+below existed. What did not work was the layout and the copy, both of which
+assumed a mouse and a wide screen:
+
+- One finger drags to orbit, two fingers pinch to dolly, matching
+  `OrbitControls`' `touches` config set explicitly in `Scene.tsx` (`ONE:
+  ROTATE, TWO: DOLLY_PAN`) rather than relying on its defaults.
+- A held press fires `onContextMenu` on mobile browsers same as a
+  right-click does on desktop, so it still adds to the mix as a secondary
+  path; the primary path on touch is the detail card's button, since
+  there is no shift key.
+- `usePointerCoarse()` in `Guide.tsx` (`matchMedia('(pointer: coarse)')`)
+  swaps the guide's and control bar's copy from "shift-click" / "hover" /
+  "right-click" to "hold" / "tap" / touch-only rows, since none of the
+  mouse-only verbs exist on a phone.
+- `.hud__top` (brief + legend) and `.hud__dock` (detail + mix tray +
+  control bar) are new wrapper divs in `Hud.tsx` that do nothing on
+  desktop, but below 680px become the only positioned elements and their
+  children go `position: static` and stack in a column. Without this the
+  four corner panels, each absolutely positioned for a wide screen,
+  physically overlap on a phone.
+- `index.html`'s viewport meta gained `maximum-scale=1, user-scalable=no,
+  viewport-fit=cover`: native pinch-zoom would otherwise fight
+  `OrbitControls`' own pinch-to-dolly, and `viewport-fit=cover` plus
+  `env(safe-area-inset-*)` padding on the two docks keeps them off a
+  notch or home-indicator.
+
 ---
 
 ## Architecture

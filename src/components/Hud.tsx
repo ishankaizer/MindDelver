@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { FACETS, FACET_ORDER } from '../lib/facets'
 import { getLlmKey, setLlmKey } from '../lib/sources/llm'
 import { PIXEL_GRADES, useGraph } from '../store/useGraph'
-import { ControlBar, Guide } from './Guide'
+import { ControlBar, Guide, usePointerCoarse } from './Guide'
 
 const EXAMPLES = [
   'a golf trophy for a golf club in Mysore',
@@ -221,6 +221,7 @@ function MixTray() {
   const clearMix = useGraph((s) => s.clearMix)
   const makeFusion = useGraph((s) => s.makeFusion)
   const fusing = useGraph((s) => s.fusing)
+  const coarse = usePointerCoarse()
 
   const empties = Math.max(0, 2 - mixIds.length)
 
@@ -235,7 +236,9 @@ function MixTray() {
         <span className="mix__title">the mix</span>
         <span className="mix__hint">
           {mixIds.length === 0
-            ? 'shift-click two branches'
+            ? coarse
+              ? 'select a node, then add to mix'
+              : 'shift-click two branches'
             : mixIds.length === 1
               ? 'one more to cross it with'
               : 'cross them'}
@@ -354,33 +357,36 @@ export function Hud() {
 
       {brief ? (
         <>
-          <motion.div
-            className="brief"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            <span className="brief__mark">bhulandar</span>
-            <span className="brief__text">{brief}</span>
-            <button onClick={() => plant('')}>new brief</button>
-          </motion.div>
+          <div className="hud__top">
+            <motion.div
+              className="brief"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+            >
+              <span className="brief__mark">bhulandar</span>
+              <span className="brief__text">{brief}</span>
+              <button onClick={() => plant('')}>new brief</button>
+            </motion.div>
 
-          <motion.div
-            className="legend-wrap"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-          >
-            <Legend />
-            <KeySlot />
-          </motion.div>
+            <motion.div
+              className="legend-wrap"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+            >
+              <Legend />
+              <KeySlot />
+            </motion.div>
+          </div>
 
-          <ControlBar />
-
-          <AnimatePresence mode="wait">
-            <Detail />
-          </AnimatePresence>
-          <MixTray />
+          <div className="hud__dock">
+            <AnimatePresence mode="wait">
+              <Detail />
+            </AnimatePresence>
+            <MixTray />
+            <ControlBar />
+          </div>
         </>
       ) : null}
 
