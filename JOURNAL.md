@@ -10,6 +10,25 @@ you did.
 
 ---
 
+## 2026-09-18 (fourth session, brief)
+
+**Ishan is switching to Claude Code on his phone for a while**, no laptop
+session in between builds. Asked for everything, including reasoning, lessons
+and open decisions, to always live in GitHub rather than depend on a local
+memory file or a session that might not exist next time.
+
+Changed the update discipline in `CLAUDE.md` from "update the docs before you
+finish" to "update and push continuously, as you go." The previous rule was
+written after a session had already stopped mid-task once with nothing
+committed and no note explaining why; on a phone that is more likely, not less,
+so waiting for a tidy end-of-session writeup is the wrong shape now. The new
+rule asks for small commits with their own journal lines through a session,
+rather than one summary commit at the end that a cutoff might never reach.
+
+No code changed this session, only the three doc files.
+
+---
+
 ## 2026-09-18 (third session, continued)
 
 **Picked up a session that had stopped midway.** Three files were sitting

@@ -14,25 +14,45 @@ If something in this repo looks wrong or arbitrary, check the lessons section
 before "fixing" it. Several of the odd-looking choices are load-bearing and are
 documented as such.
 
-## Update these before you finish
+## Update these continuously, not just at the end
 
 **This is not optional, and it is the point of the whole setup: every session
-builds on every previous session.**
+builds on every previous session, and GitHub is the only copy that is
+guaranteed to still be there next time.**
 
-At the end of a session in which anything was learned, decided, or changed:
+Ishan is running this from his phone for a while, with no laptop session
+sitting open in between. A session can end without warning, mid-task, with no
+chance to write a closing summary - this has already happened once. So the rule
+is not "document before you finish", it is **document as you go, and commit and
+push at every stopping point that would still make sense if nothing came after
+it.** Do not save the journal entry, the README updates and the push for a tidy
+wrap-up at the end. If you are not sure whether a session is about to be
+interrupted, treat it as though it is.
 
-- **`JOURNAL.md`** gets a new entry at the top, dated. Say what changed and
-  **why**, what was tried and rejected, what was raised but deliberately left
-  undecided, and what the next session should pick up. Include commit hashes.
-- **`README.md`** gets updated wherever the change made it stale: the
-  architecture map if files were added or moved, "Not built yet" if something
-  got built, "Known open questions" if something was raised or resolved.
-- **The "Hard-won lessons" section** gets a new entry whenever something cost
-  real debugging time, or whenever you catch yourself thinking "I should write
-  this down so nobody does it again". Write the lesson *and* the symptom it
-  produced, because the symptom is how the next session will recognise it.
+Concretely: after any piece of work that would be a shame to lose the reasoning
+for - a decision made, a bug chased down, a direction tried and abandoned -
+stop and write it down and commit it before moving to the next piece. A session
+that does five things and writes five small commits, each with its own journal
+line, is worth more here than one that does five things and writes it all up in
+a single commit at the end that a cutoff might never reach.
 
-Do this even for a small session. A one-line journal entry beats a gap.
+Four kinds of thing need a home, every time, not just at a session's natural end:
+
+- **What changed and why.** `JOURNAL.md`, new entry at the top, dated. Include
+  commit hashes. This is reasoning and thought process, not a changelog - say
+  what the alternative was and why it lost, not just what shipped.
+- **Errors and lessons that cost real time.** `README.md`'s "Hard-won lessons"
+  section. Write the lesson *and* the symptom it produced, because the symptom
+  is how the next session will recognise it before it burns the time again.
+- **Decisions made.** Wherever they change what the README says is true:
+  architecture map, "Not built yet", the decided-things list in House rules.
+- **Decisions raised but not made.** `README.md`'s "Known open questions".
+  A half-finished thought is still worth a paragraph there. It is much easier
+  for the next session, possibly on a different day from a different phone, to
+  pick up a written question than to reconstruct that it was ever asked.
+
+A one-line journal entry plus a push beats a gap. A gap is what this exists to
+prevent.
 
 ## House rules
 
@@ -40,7 +60,9 @@ Do this even for a small session. A one-line journal entry beats a gap.
   applies to code comments, docs, commit messages and anything said to Ishan.
 - **Commit before any risky redesign**, so there is something to come back to.
 - **Push to `origin master`** (`https://github.com/ishankaizer/MindDelver.git`)
-  to deploy. Pushing is the normal end of a piece of work here.
+  frequently, not just once at the end of a session. GitHub is the only copy
+  guaranteed to survive between sessions right now. An uncommitted or unpushed
+  change does not exist as far as the next session is concerned.
 - **Do not redesign the decided things without asking**: the coral growth form,
   the six facets, the underwater pixel-art direction, the explicit controls, or
   the label rules. All four are documented in the README with the reasoning.

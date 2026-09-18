@@ -231,8 +231,13 @@ Each of these cost real time at least once.
 - **Commit before any risky redesign.**
 - **Push to `origin master` to deploy.**
 - **No em dashes** in anything written for Ishan.
-- **Update `README.md` and `JOURNAL.md` at the end of every session** so the next
-  session starts from everything already learned. See `CLAUDE.md`.
+- **Update `README.md` and `JOURNAL.md` continuously, not just at the end of a
+  session** so the next session starts from everything already learned even if
+  this one gets cut off first. See `CLAUDE.md`.
+- **From 2026-09-18, Ishan is working from his phone for a while**, with no
+  laptop session in between. GitHub is the only copy of this project's state
+  and reasoning that is guaranteed to persist between sessions. Commit and push
+  early and often, not once at the end.
 
 ## Not built yet
 
