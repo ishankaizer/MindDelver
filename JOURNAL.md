@@ -10,6 +10,44 @@ you did.
 
 ---
 
+## 2026-09-18 (sixth session): installable PWA
+
+Follow-up to the mobile pass: asked to add a manifest so the app installs to
+a home screen, which the previous session had flagged as raised-but-not-done.
+
+**What changed:**
+- `public/manifest.webmanifest`: standalone display, trench background and
+  theme colour, three icon entries (192, 512, and a maskable 512).
+- `public/sw.js`: registered from `main.tsx`, production builds only. It
+  caches the app shell (same-origin GETs, stale-while-revalidate) and
+  explicitly leaves every cross-origin request alone. This was a deliberate
+  line: the app's "brain" is a live Datamuse lookup, optionally upgraded by
+  a pasted LLM key, so a service worker that cached growth results would
+  make the tool answer offline sessions with the same stale branches every
+  time, which is exactly the narrowness the whole tool exists to avoid.
+  Caching the shell but never the word data was the right split.
+- `tools/generate-icons.mjs`: a dependency-free script (own PNG encoder,
+  `zlib.deflateSync` for compression, no canvas/sharp/imagemagick, since
+  none were available in this container and none should be a build
+  dependency for four static files) that paints the bioluminescent seed and
+  its six facet-coloured limbs in the actual game palette, then
+  nearest-neighbour scales it into every required icon size. First pass had
+  the maskable icon showing a visible rectangle where the two-tone trench/
+  abyss background band got cropped mid-gradient by the OS's circle mask;
+  fixed by giving the maskable variant a flat trench background instead of
+  the gradient.
+- Noted in the README that shipping these PNGs does not contradict "no
+  assets are ever shipped": that rule is about the reef itself staying
+  procedural, not about app chrome, and a PWA icon has to exist as a static
+  file before any JS can generate anything.
+
+**Verified.** `npm run build`, then `vite preview` with the headless
+Chromium, fetching the manifest and every icon URL it lists (200,
+`image/png`, non-zero bytes) and checking `navigator.serviceWorker
+.getRegistration()` reached `state: 'activated'` with no console errors.
+
+---
+
 ## 2026-09-18 (fifth session): mobile pass
 
 Asked to make the whole app work on a phone, controls included. Checked first:

@@ -1,0 +1,31 @@
+{
+  "name": "Bhulandar",
+  "short_name": "Bhulandar",
+  "description": "Plant a brief, watch it branch into a coral sculpture of everything the words can mean, and pull branches together to find concepts you would not have reached on your own.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#04101f",
+  "theme_color": "#04101f",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

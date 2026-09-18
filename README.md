@@ -116,6 +116,39 @@ assumed a mouse and a wide screen:
   `env(safe-area-inset-*)` padding on the two docks keeps them off a
   notch or home-indicator.
 
+### Installable (PWA)
+
+`public/manifest.webmanifest` plus `public/sw.js`, registered from
+`main.tsx` only in a production build (`import.meta.env.PROD`, since the
+dev server has nothing at `/sw.js`). "Add to home screen" / "install app"
+now shows up in a mobile or desktop browser, launches `display: standalone`
+(no address bar), and uses the trench colour as both `background_color` and
+`theme_color`.
+
+The service worker caches the app shell only - it does not try to make
+growth work offline. Bhulandar's whole "brain" is a live word lookup
+(Datamuse, optionally an LLM upgrade), so caching that would mean answering
+every offline session with the same stale six branches, which defeats the
+point of the tool. `sw.js` explicitly skips any cross-origin request, so
+`api.datamuse.com` and a pasted LLM key's endpoint always go live; only
+same-origin GETs (the built JS/CSS/HTML/icons) get cached, stale-while-
+revalidate style, so a repeat visit or a flaky connection still opens the
+reef instead of a blank tab.
+
+The icons themselves (`public/icons/*.png`, `public/favicon.png`) are the
+one exception to "no assets are ever shipped": that rule is about the reef
+staying procedural, not about app chrome, and a PWA icon has to exist as a
+static file before any JS runs. They are still generated rather than drawn
+by hand - `tools/generate-icons.mjs` is a dependency-free script (hand-
+rolled PNG encoder, `zlib.deflateSync` for the one compressed chunk) that
+paints the bioluminescent seed and its six facet-coloured limbs onto the
+same trench/abyss palette the scene uses, then nearest-neighbour scales it
+to each required size, so the app icon is recognisably the same object as
+the thing growing on screen. Re-run `node tools/generate-icons.mjs` if the
+icon design changes; the maskable variant renders with a flat background
+(no gradient band) since a two-tone rectangle would show as a hard edge
+once the OS crops a circle out of the full bleed.
+
 ---
 
 ## Architecture
